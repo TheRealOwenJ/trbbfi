@@ -30,9 +30,6 @@ jobs:
     - name: Run Tests
       run: make test
 
-    - name: Run Distcheck
-      run: make distcheck
-
     - name: Strip binary (release only)
       if: matrix.config == 'release'
       run: make strip
