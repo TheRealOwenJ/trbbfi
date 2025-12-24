@@ -3,7 +3,7 @@
  * Author: TheRealOwenJ
  * Repository: https://github.com/TheRealOwenJ/trbbfi
  *
- * Licensed under GNU GPL v3.
+ * Licensed under GNU GPL v3 to prevent theft.
  * See LICENSE file for details.
  */
 
@@ -36,8 +36,6 @@ public:
 
     void loadCode(const std::string& program) {
         code.clear();
-        if (program.empty()) return;
-
         for (char c : program) {
             if (c == '>' || c == '<' || c == '+' || c == '-' ||
                 c == '.' || c == ',' || c == '[' || c == ']') {
@@ -105,16 +103,16 @@ public:
                     std::cout.flush();
                     break;
                 case ',':
-                    {
-                        int input = std::cin.get();
-                        if (std::cin.fail()) {
-                            std::cin.clear();
-                            memory[memptr] = 0;
-                        } else {
-                            memory[memptr] = (input == EOF) ? 0 : (unsigned char)input;
-                        }
+                {
+                    int input = std::cin.get();
+                    if (std::cin.fail()) {
+                        std::cin.clear();
+                        memory[memptr] = 0;
+                    } else {
+                        memory[memptr] = (input == EOF) ? 0 : (unsigned char)input;
                     }
                     break;
+                }
                 case '[':
                     if (memory[memptr] == 0) {
                         int balance = 1;
@@ -197,9 +195,9 @@ public:
         std::cout << "  help (or h)        - Show this help\n";
         std::cout << "  exit/quit/q        - Exit TRBBFI\n";
         std::cout << "\nTips:\n";
-        std::cout << "  - Debug output goes to stderr (red text in most terminals)\n";
+        std::cout << "  - Debug output goes to stderr\n";
         std::cout << "  - Files must contain valid Brainfuck code (+-<>[].,)\n";
-        std::cout << "  - Memory is limited to 1MB for safety\n";
+        std::cout << "  - Memory is limited to 1MB\n";
     }
 
     std::vector<std::string> tokenize(const std::string& line) {
@@ -216,7 +214,10 @@ public:
 
         while (true) {
             std::cout << "trbbfi> ";
-            if (!std::getline(std::cin, line)) break;
+            if (!std::getline(std::cin, line)) {
+                std::cout << "\nBye!\n";
+                break;
+            }
 
             line.erase(0, line.find_first_not_of(" \t"));
             line.erase(line.find_last_not_of(" \t") + 1);
@@ -225,26 +226,128 @@ public:
             if (line == "exit" || line == "quit" || line == "q") break;
 
             auto tokens = tokenize(line);
-            std::string cmd = tokens.empty() ? "" : tokens[0];
+            if (tokens.empty()) continue;
 
-            if (cmd == "help" || cmd == "h") printHelp();
-            else if (cmd == "clear" || cmd == "c") current_program.clear();
-            else std::cout << "Unknown command\n";
+            std::string cmd = tokens[0];
+
+            try {
+                if (cmd == "help" || cmd == "h") printHelp();
+                else if (cmd == "load") {
+                    if (tokens.size() < 2) { std::cout << "Usage: load <file.bf>\n"; continue; }
+                    std::string filename = tokens[1];
+                    if (filename.find("..") != std::string::npos) { std::cout << "Error: Invalid filename\n"; continue; }
+                    std::ifstream file(filename, std::ios::binary);
+                    if (!file) { std::cout << "Error: Cannot open file\n"; continue; }
+                    file.seekg(0, std::ios::end);
+                    size_t filesize = file.tellg();
+                    if (filesize > 1000000) { std::cout << "Error: File too large\n"; continue; }
+                    file.seekg(0, std::ios::beg);
+                    std::string program((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+                    interpreter.loadCode(program);
+                    current_program = program;
+                    std::cout << "Loaded " << interpreter.getCodeSize() << " instructions from " << filename << "\n";
+                } else if (cmd == "code") {
+                    if (tokens.size() < 2) { std::cout << "Usage: code <program>\n"; continue; }
+                    std::string program;
+                    for (size_t i = 1; i < tokens.size(); i++) { program += tokens[i]; if (i < tokens.size() - 1) program += " "; }
+                    if (program.length() > 10000) { std::cout << "Error: Program too long\n"; continue; }
+                    interpreter.loadCode(program);
+                    current_program = program;
+                    std::cout << "Loaded " << interpreter.getCodeSize() << " instructions\n";
+                } else if (cmd == "run" || cmd == "r") {
+                    if (current_program.empty()) std::cout << "No program loaded.\n";
+                    else if (!interpreter.execute()) std::cout << "Program failed.\n";
+                } else if (cmd == "reset") { interpreter.reset(); std::cout << "Interpreter reset\n"; }
+                else if (cmd == "dump") {
+                    size_t start = 0, count = 16;
+                    if (tokens.size() > 1) start = std::stoul(tokens[1]);
+                    if (tokens.size() > 2) count = std::stoul(tokens[2]);
+                    interpreter.dumpMemory(start, count);
+                } else if (cmd == "debug" || cmd == "d") {
+                    if (tokens.size() > 1) {
+                        std::string arg = tokens[1]; std::transform(arg.begin(), arg.end(), arg.begin(), ::tolower);
+                        if (arg == "on") { interpreter.setDebug(true); debug_mode = true; std::cout << "Debug mode on\n"; }
+                        else if (arg == "off") { interpreter.setDebug(false); debug_mode = false; std::cout << "Debug mode off\n"; }
+                        else std::cout << "Usage: debug [on|off]\n";
+                    } else std::cout << "Usage: debug [on|off]\n";
+                } else if (cmd == "show" || cmd == "s") {
+                    if (current_program.empty()) std::cout << "No program loaded\n";
+                    else std::cout << "Program (" << interpreter.getCodeSize() << " instructions): "
+                                   << current_program.substr(0, std::min(size_t(200), current_program.size())) << "\n";
+                } else if (cmd == "clear" || cmd == "c") { current_program.clear(); std::cout << "Program cleared\n"; }
+                else if (cmd == "status") {
+                    std::cout << "Status:\n  Program loaded: " << (current_program.empty() ? "No" : "Yes")
+                              << "\n  Instructions: " << interpreter.getCodeSize()
+                              << "\n  Memory pointer: " << interpreter.getMemoryPointer()
+                              << "\n  Debug mode: " << (debug_mode ? "On" : "Off") << "\n";
+                } else { std::cout << "Unknown command: " << cmd << "\n"; }
+            } catch (...) { std::cout << "Error occurred\n"; }
         }
+
+        std::cout << "Goodbye!\n";
     }
 };
 
 void printUsage(const char* prog_name) {
-    std::cout << "TRBBFI v" << TRBBFI_VERSION << " - The Really Better Brainfuck Interpreter\n";
+    std::cout << "TRBBFI v" << TRBBFI_VERSION << " - The Really Better Brainfuck Interpreter\n\n";
+    std::cout << "Usage:\n  " << prog_name << "         # Start shell\n"
+              << "  " << prog_name << " file.bf  # Execute file\n"
+              << "  " << prog_name << " -c code   # Execute code\n"
+              << "  " << prog_name << " -d file.bf # Debug mode\n"
+              << "  " << prog_name << " -h|--help  # Help\n"
+              << "  " << prog_name << " -v|--version # Version\n";
 }
 
 void printVersion() {
-    std::cout << "TRBBFI v" << TRBBFI_VERSION << " by TheRealOwenJ\n";
-    std::cout << "Licensed under GNU GPL v3\n";
-    std::cout << "https://github.com/TheRealOwenJ/trbbfi\n";
+    std::cout << "TRBBFI v" << TRBBFI_VERSION << " by TheRealOwenJ\n"
+              << "Licensed under GNU GPL v3\n"
+              << "https://github.com/TheRealOwenJ/trbbfi\n";
 }
 
 int main(int argc, char* argv[]) {
-    printUsage(argv[0]);
+    BrainfuckInterpreter interpreter;
+    bool debug_mode = false;
+    std::string code_arg;
+
+    static struct option long_options[] = {
+        {"help", no_argument, 0, 'h'},
+        {"version", no_argument, 0, 'v'},
+        {"code", required_argument, 0, 'c'},
+        {"debug", no_argument, 0, 'd'},
+        {0, 0, 0, 0}
+    };
+
+    int c;
+    while ((c = getopt_long(argc, argv, "hvc:d", long_options, NULL)) != -1) {
+        switch (c) {
+            case 'h': printUsage(argv[0]); return 0;
+            case 'v': printVersion(); return 0;
+            case 'c': code_arg = optarg; break;
+            case 'd': debug_mode = true; break;
+            case '?': return 1;
+            default: return 1;
+        }
+    }
+
+    interpreter.setDebug(debug_mode);
+
+    if (!code_arg.empty()) {
+        interpreter.loadCode(code_arg);
+        return interpreter.execute() ? 0 : 1;
+    }
+
+    if (optind < argc) {
+        std::ifstream file(argv[optind], std::ios::binary);
+        if (!file) { std::cerr << "Error opening file\n"; return 1; }
+        std::string program((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        interpreter.loadCode(program);
+        return interpreter.execute() ? 0 : 1;
+    }
+
+    try {
+        Shell shell;
+        shell.run();
+    } catch (...) { std::cerr << "Fatal error\n"; return 1; }
+
     return 0;
 }
