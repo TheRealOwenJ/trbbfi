@@ -2,37 +2,59 @@ name: C/C++ CI - TRBBFI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
   build:
-
-    runs-on: ubuntu-latest
     strategy:
       matrix:
+        os: [ubuntu-latest, windows-latest]
         config: [release, debug, profile]
 
+    runs-on: ${{ matrix.os }}
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Install build dependencies
-      run: sudo apt-get update && sudo apt-get install -y build-essential clang-format cppcheck
+      - name: Install build dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang-format cppcheck mingw-w64
 
-    - name: Set build configuration
-      run: echo "BUILD_CONFIG=${{ matrix.config }}" >> $GITHUB_ENV
+      - name: Install build dependencies
+        if: matrix.os == 'windows-latest'
+        run: |
+          choco install mingw -y
+          choco install llvm -y
 
-    - name: Build
-      run: make ${{ matrix.config }}
+      - name: Set build configuration
+        run: echo "BUILD_CONFIG=${{ matrix.config }}" >> $GITHUB_ENV
 
-    - name: Run Tests
-      run: make test
+      - name: Build
+        run: |
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            make clean TARGET=trbbfi.exe CXX=x86_64-w64-mingw32-g++ ${{ matrix.config }}
+          else
+            make clean ${{ matrix.config }}
+          fi
 
-    - name: Strip binary (release only)
-      if: matrix.config == 'release'
-      run: make strip
+      - name: Run Tests
+        run: |
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            ./trbbfi.exe --version
+            make test
+          else
+            ./trbbfi --version
+            make test
+          fi
 
-    - name: Show build info
-      run: make info
+      - name: Strip binary (release only)
+        if: matrix.config == 'release' && runner.os != 'Windows'
+        run: make strip
+
+      - name: Show build info
+        run: make info
