@@ -19,50 +19,56 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Linux dependencies
       - name: Install build dependencies (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential clang-format cppcheck mingw-w64
 
+      # Windows dependencies
       - name: Install build dependencies (Windows)
         if: matrix.os == 'windows-latest'
-        shell: bash
+        shell: pwsh
         run: |
           choco install mingw -y
-          choco install llvm -y
+          $env:PATH += ";C:\ProgramData\chocolatey\bin"
 
+      # Set build configuration
       - name: Set build configuration
         run: echo "BUILD_CONFIG=${{ matrix.config }}" >> $GITHUB_ENV
 
-      # Build the binary
+      # Build
       - name: Build TRBBFI
-        shell: bash
+        shell: pwsh
         run: |
-          if [ "${{ runner.os }}" == "Windows" ]; then
-            make clean TARGET=trbbfi.exe CXX=x86_64-w64-mingw32-g++ $BUILD_CONFIG
-          else
-            make clean $BUILD_CONFIG
-          fi
+          if ($env:RUNNER_OS -eq "Windows") {
+            $env:BUILD_CONFIG = "${{ matrix.config }}"
+            mingw32-make clean TARGET=trbbfi.exe CXX=x86_64-w64-mingw32-g++ $env:BUILD_CONFIG
+          } else {
+            make clean $env:BUILD_CONFIG
+          }
 
       # Run tests
       - name: Run tests
-        shell: bash
+        shell: pwsh
         run: |
-          if [ "${{ runner.os }}" == "Windows" ]; then
+          if ($env:RUNNER_OS -eq "Windows") {
+            if (-Not (Test-Path ./trbbfi.exe)) { throw "Build failed: trbbfi.exe not found" }
             ./trbbfi.exe --version
-            make test
-          else
+            mingw32-make test
+          } else {
             ./trbbfi --version
             make test
-          fi
+          }
 
-      # Strip Linux binary only (Windows skip)
+      # Strip binary (Linux release only)
       - name: Strip binary (Linux release only)
-        if: matrix.config == 'release' && runner.os != 'Windows'
+        if: matrix.config == 'release' && runner.os == 'Linux'
         shell: bash
         run: make strip
 
+      # Show build info
       - name: Show build info
         shell: bash
         run: make info
