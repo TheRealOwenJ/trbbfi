@@ -20,6 +20,15 @@ trbbfi -h
 ```
 for all the commands.
 
+## Installing
+
+Currently, TRBBFI is only available on the Arch Linux AUR and Github Releases.
+
+AUR command:
+```bash
+yay -S trbbfi-git
+```
+
 ## Manually Building
 
 NOTE: The windows documentation is coming soon! You just need to use msys2!
