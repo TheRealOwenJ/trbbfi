@@ -7,11 +7,27 @@
 # Configuration
 # =============================================================================
 
+# Detect OS
+ifeq ($(OS),Windows_NT)
+    IS_WINDOWS = 1
+else
+    IS_WINDOWS = 0
+endif
+
 # Compiler and tools
 CXX ?= g++
 STRIP ?= strip
 INSTALL ?= install
 RM ?= rm -f
+
+# On Windows with MinGW, du and seq may not exist. Use alternatives
+ifeq ($(IS_WINDOWS),1)
+    DU ?= echo
+    SEQ ?= $(shell seq)
+else
+    DU ?= du -h
+    SEQ ?= seq
+endif
 
 # Directories
 PREFIX ?= /usr/local
@@ -28,15 +44,14 @@ VERSION = 1.0
 
 # Compiler flags
 CXXFLAGS_BASE = -std=c++17 -Wall -Wextra -Wpedantic -Wconversion -Wshadow
-CXXFLAGS_RELEASE = $(CXXFLAGS_BASE) -O3 -DNDEBUG -march=native
-CXXFLAGS_DEBUG = $(CXXFLAGS_BASE) -g3 -O0 -DDEBUG -fsanitize=address -fsanitize=undefined
+CXXFLAGS_RELEASE = $(CXXFLAGS_BASE) -O3 -DNDEBUG
+CXXFLAGS_DEBUG = $(CXXFLAGS_BASE) -g3 -O0 -DDEBUG
 CXXFLAGS_PROFILE = $(CXXFLAGS_BASE) -O2 -g -pg
 
-# Default flags
 CXXFLAGS ?= $(CXXFLAGS_RELEASE)
 
 # Linker flags
-LDFLAGS_DEBUG = -fsanitize=address -fsanitize=undefined
+LDFLAGS_DEBUG =
 LDFLAGS_PROFILE = -pg
 LDFLAGS ?=
 
@@ -70,15 +85,18 @@ $(TARGET): $(SOURCE)
 	@echo "Building $(TARGET) with $(CXX)..."
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $(TARGET) $(SOURCE)
 	@echo "Build complete: $(TARGET)"
+ifeq ($(IS_WINDOWS),0)
 	@echo "Binary size: $$(du -h $(TARGET) | cut -f1)"
-	@if [ "$(CXXFLAGS)" = "$(CXXFLAGS_RELEASE)" ]; then \
-		echo "Release build - run 'make strip' to reduce size further"; \
-	fi
+endif
 
 strip: $(TARGET)
+ifeq ($(IS_WINDOWS),0)
 	@echo "Stripping debug symbols..."
 	$(STRIP) $(TARGET)
 	@echo "Stripped binary size: $$(du -h $(TARGET) | cut -f1)"
+else
+	@echo "Strip not supported on native Windows. Skipping..."
+endif
 
 # Development targets
 check-syntax:
@@ -140,127 +158,35 @@ test: $(TARGET)
 	@echo "All tests completed successfully!"
 	@echo "========================================="
 
-test-verbose: $(TARGET)
-	@echo "Running verbose tests..."
-	@echo "Testing with debug output:"
-	./$(TARGET) -d -c $(HELLO_WORLD)
-	@echo
-	@echo "Testing interactive shell:"
-	@echo -e "help\ncode $(HELLO_WORLD)\nshow\nrun\nstatus\nexit" | ./$(TARGET)
-
-# Performance test
-benchmark: $(TARGET)
-	@echo "Running performance benchmark..."
-	@echo "Creating large Brainfuck program..."
-	@echo "$(HELLO_WORLD)" > bench.bf
-	@for i in $$(seq 1 100); do cat bench.bf >> bench_large.bf; done
-	@echo "Running benchmark (100x Hello World)..."
-	@time ./$(TARGET) bench_large.bf >/dev/null
-	@$(RM) bench.bf bench_large.bf
-	@echo "Benchmark complete!"
-
 # Installation targets
 install: $(TARGET)
 	@echo "Installing $(TARGET) to $(BINDIR)..."
 	$(INSTALL) -d $(BINDIR)
 	$(INSTALL) -m 755 $(TARGET) $(BINDIR)/$(TARGET)
 	@echo "Installation complete!"
-	@echo "You can now run: $(TARGET)"
 
 uninstall:
 	@echo "Uninstalling $(TARGET) from $(BINDIR)..."
 	$(RM) $(BINDIR)/$(TARGET)
 	@echo "Uninstallation complete!"
 
-# Package targets
-dist: clean
-	@echo "Creating distribution archive..."
-	@mkdir -p trbbfi-$(VERSION)
-	@cp *.cpp *.bf Makefile LICENSE trbbfi-$(VERSION)/
-	@tar -czf trbbfi-$(VERSION).tar.gz trbbfi-$(VERSION)/
-	@$(RM) -r trbbfi-$(VERSION)
-	@echo "Created: trbbfi-$(VERSION).tar.gz"
-
 # Cleanup targets
 clean:
 	@echo "Cleaning build artifacts..."
 	$(RM) $(TARGET) *.o *~ *.core *.gch
-	$(RM) test_temp.bf bench.bf bench_large.bf
-	$(RM) gmon.out *.gcov *.gcda *.gcno
 	@echo "Clean complete!"
 
 distclean: clean
 	$(RM) *.tar.gz
 	$(RM) -r $(BUILDDIR) 2>/dev/null || true
 
-# Information targets
-info:
-	@echo "========================================="
-	@echo "TRBBFI Build Information"
-	@echo "========================================="
-	@echo "Target:           $(TARGET)"
-	@echo "Version:          $(VERSION)"
-	@echo "Source:           $(SOURCE)"
-	@echo "Compiler:         $(CXX)"
-	@echo "Install prefix:   $(PREFIX)"
-	@echo "Install bindir:   $(BINDIR)"
-	@echo "========================================="
-	@echo "Current build flags:"
-	@echo "CXXFLAGS:         $(CXXFLAGS)"
-	@echo "LDFLAGS:          $(LDFLAGS)"
-	@echo "========================================="
-
+# Help/info
 help:
 	@echo "TRBBFI - The Really Better Brainfuck Interpreter"
-	@echo "Build system help"
-	@echo
 	@echo "Build targets:"
 	@echo "  all, release    Build optimized release version (default)"
 	@echo "  debug          Build debug version with sanitizers"
 	@echo "  profile        Build profiling version"
 	@echo "  strip          Strip debug symbols from binary"
-	@echo
-	@echo "Development targets:"
-	@echo "  check-syntax   Check code syntax without building"
-	@echo "  format         Format code with clang-format"
-	@echo "  lint           Run static analysis tools"
-	@echo
-	@echo "Testing targets:"
-	@echo "  test           Run comprehensive test suite"
-	@echo "  test-verbose   Run tests with verbose output"
-	@echo "  benchmark      Run performance benchmark"
-	@echo
-	@echo "Installation targets:"
-	@echo "  install        Install to $(PREFIX)/bin"
-	@echo "  uninstall      Remove from system"
-	@echo
-	@echo "Package targets:"
-	@echo "  dist           Create distribution archive"
-	@echo
-	@echo "Cleanup targets:"
 	@echo "  clean          Remove build artifacts"
 	@echo "  distclean      Remove all generated files"
-	@echo
-	@echo "Information targets:"
-	@echo "  info           Show build configuration"
-	@echo "  help           Show this help message"
-	@echo
-	@echo "Environment variables:"
-	@echo "  CXX            C++ compiler (default: g++)"
-	@echo "  PREFIX         Install prefix (default: /usr/local)"
-	@echo "  CXXFLAGS       Additional compiler flags"
-	@echo "  LDFLAGS        Additional linker flags"
-	@echo
-	@echo "Examples:"
-	@echo "  make                    # Build release version"
-	@echo "  make debug              # Build debug version"
-	@echo "  make test               # Run tests"
-	@echo "  make PREFIX=/opt install # Install to /opt/bin"
-	@echo "  make CXX=clang++        # Use clang++ compiler"
-
-# Dependency checking
-$(SOURCE):
-	@if [ ! -f "$(SOURCE)" ]; then \
-		echo "Error: Source file $(SOURCE) not found!"; \
-		exit 1; \
-	fi

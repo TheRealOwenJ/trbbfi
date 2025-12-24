@@ -15,7 +15,6 @@
 #include <sstream>
 #include <algorithm>
 #include <cstring>
-#include <getopt.h>
 
 #define TRBBFI_VERSION "1.0"
 #define TRBBFI_BUILD_DATE __DATE__
@@ -194,10 +193,6 @@ public:
         std::cout << "  status             - Show interpreter status\n";
         std::cout << "  help (or h)        - Show this help\n";
         std::cout << "  exit/quit/q        - Exit TRBBFI\n";
-        std::cout << "\nTips:\n";
-        std::cout << "  - Debug output goes to stderr\n";
-        std::cout << "  - Files must contain valid Brainfuck code (+-<>[].,)\n";
-        std::cout << "  - Memory is limited to 1MB\n";
     }
 
     std::vector<std::string> tokenize(const std::string& line) {
@@ -288,12 +283,34 @@ public:
     }
 };
 
+struct Options {
+    std::string code;
+    bool debug = false;
+    bool help = false;
+    bool version = false;
+    std::vector<std::string> files;
+};
+
+Options parseArgs(int argc, char* argv[]) {
+    Options opts;
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        if (arg == "-h" || arg == "--help") opts.help = true;
+        else if (arg == "-v" || arg == "--version") opts.version = true;
+        else if (arg == "-c" && i + 1 < argc) { opts.code = argv[++i]; }
+        else if (arg == "-d" || arg == "--debug") opts.debug = true;
+        else opts.files.push_back(arg);
+    }
+    return opts;
+}
+
 void printUsage(const char* prog_name) {
     std::cout << "TRBBFI v" << TRBBFI_VERSION << " - The Really Better Brainfuck Interpreter\n\n";
-    std::cout << "Usage:\n  " << prog_name << "         # Start shell\n"
-              << "  " << prog_name << " file.bf  # Execute file\n"
-              << "  " << prog_name << " -c code   # Execute code\n"
-              << "  " << prog_name << " -d file.bf # Debug mode\n"
+    std::cout << "Usage:\n"
+              << "  " << prog_name << "           # Start shell\n"
+              << "  " << prog_name << " file.bf    # Execute file\n"
+              << "  " << prog_name << " -c code     # Execute code\n"
+              << "  " << prog_name << " -d         # Debug mode\n"
               << "  " << prog_name << " -h|--help  # Help\n"
               << "  " << prog_name << " -v|--version # Version\n";
 }
@@ -306,48 +323,27 @@ void printVersion() {
 
 int main(int argc, char* argv[]) {
     BrainfuckInterpreter interpreter;
-    bool debug_mode = false;
-    std::string code_arg;
+    Shell shell;
+    Options opts = parseArgs(argc, argv);
 
-    static struct option long_options[] = {
-        {"help", no_argument, 0, 'h'},
-        {"version", no_argument, 0, 'v'},
-        {"code", required_argument, 0, 'c'},
-        {"debug", no_argument, 0, 'd'},
-        {0, 0, 0, 0}
-    };
+    interpreter.setDebug(opts.debug);
 
-    int c;
-    while ((c = getopt_long(argc, argv, "hvc:d", long_options, NULL)) != -1) {
-        switch (c) {
-            case 'h': printUsage(argv[0]); return 0;
-            case 'v': printVersion(); return 0;
-            case 'c': code_arg = optarg; break;
-            case 'd': debug_mode = true; break;
-            case '?': return 1;
-            default: return 1;
-        }
-    }
+    if (opts.help) { printUsage(argv[0]); return 0; }
+    if (opts.version) { printVersion(); return 0; }
 
-    interpreter.setDebug(debug_mode);
-
-    if (!code_arg.empty()) {
-        interpreter.loadCode(code_arg);
+    if (!opts.code.empty()) {
+        interpreter.loadCode(opts.code);
         return interpreter.execute() ? 0 : 1;
     }
 
-    if (optind < argc) {
-        std::ifstream file(argv[optind], std::ios::binary);
+    if (!opts.files.empty()) {
+        std::ifstream file(opts.files[0], std::ios::binary);
         if (!file) { std::cerr << "Error opening file\n"; return 1; }
         std::string program((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
         interpreter.loadCode(program);
         return interpreter.execute() ? 0 : 1;
     }
 
-    try {
-        Shell shell;
-        shell.run();
-    } catch (...) { std::cerr << "Fatal error\n"; return 1; }
-
+    shell.run();
     return 0;
 }
