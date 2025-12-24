@@ -1,6 +1,7 @@
 # TRBBFI - The Really Better BrainFuck Interpreter
 
 TRBBFI is a BrainFuck interpreter written in C++ that aims to be the best BrainFuck interpreter for everyone.
+It also supports Windows and Linux.
 
 ## Usage
 To open the shell, run:
@@ -20,6 +21,8 @@ trbbfi -h
 for all the commands.
 
 ## Manually Building
+
+NOTE: The windows documentation is coming soon! You just need to use msys2 mingw-w64!
 
 To manually build TRBBFI, follow these steps:
 
