@@ -71,4 +71,4 @@ jobs:
       # Show build info
       - name: Show build info
         shell: bash
-        run: make info
+        run: make help
