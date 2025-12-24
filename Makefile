@@ -161,8 +161,8 @@ test: $(TARGET)
 # Installation targets
 install: $(TARGET)
 	@echo "Installing $(TARGET) to $(BINDIR)..."
-	$(INSTALL) -d $(BINDIR)
-	$(INSTALL) -m 755 $(TARGET) $(BINDIR)/$(TARGET)
+$(INSTALL) -d $(DESTDIR)$(BINDIR)
+	$(INSTALL) -m 755 $(TARGET) $(DESTDIR)$(BINDIR)/$(TARGET)
 	@echo "Installation complete!"
 
 uninstall:
