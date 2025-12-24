@@ -24,9 +24,6 @@ jobs:
     - name: Set build configuration
       run: echo "BUILD_CONFIG=${{ matrix.config }}" >> $GITHUB_ENV
 
-    - name: Configure
-      run: ./configure
-
     - name: Build
       run: make ${{ matrix.config }}
 
