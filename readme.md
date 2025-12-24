@@ -22,7 +22,7 @@ for all the commands.
 
 ## Manually Building
 
-NOTE: The windows documentation is coming soon! You just need to use msys2 mingw-w64!
+NOTE: The windows documentation is coming soon! You just need to use msys2!
 
 To manually build TRBBFI, follow these steps:
 
